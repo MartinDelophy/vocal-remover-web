@@ -4,7 +4,7 @@ use tensorflow and uvr to remove
 
 ## remove human voice through audio, pure web, easy to use
 
-this repository is the easy demo to use, you can pull it by yourself it you want to know how it work
+this repository is the easy demo to use, you can pull it by yourself. if you want to know how it work
 
 
 
