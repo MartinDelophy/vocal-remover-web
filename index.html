@@ -10,7 +10,8 @@
   <body>
     <h1>本DEMO 可以将人声移除, 上传文件后请耐心等待，直到进度条完成</h1>
     <input type="file" id="file" />
-    <progress id="progress" value="0" max="100" ></progress><span id="tips"></span>
+    <progress id="progress" value="0" max="100"></progress
+    ><span id="tips"></span>
     <script>
       // Function to convert AudioBuffer to WAV Blob
       function bufferToWavBlob(buffer) {
@@ -92,7 +93,6 @@
         l2.dispose();
         r.dispose();
         r2.dispose();
-        tf.engine().endScope();
         return result;
       }
 
@@ -214,7 +214,7 @@
         const reader = new FileReader();
         reader.onload = function (e) {
           const audioData = e.target.result;
-          handler(audioData)
+          handler(audioData);
         };
         reader.readAsArrayBuffer(file);
       });
@@ -265,6 +265,8 @@
           console.log("buffer0", chunkedChannelData);
           const writeBuffers0 = [];
           const writeBuffers1 = [];
+          const writeVocalBuffers0 = [];
+          const writeVocalBuffers1 = [];
           let progress = 0;
           for await (let chunk of chunkedChannelData) {
             const $channelData = chunk;
@@ -335,10 +337,13 @@
               let data = tf.tidy(() => {
                 return model.predict(reshaped2);
               });
-
+              let vocaldata = tf.tidy(() => {
+                return tf.sub(reshaped2, data);
+              });
               reshaped2.dispose();
-              console.log("66666", data);
               let signals = await istft(data);
+              let signals2 = await istft(vocaldata);
+              tf.engine().endScope();
               let elapse = currentLast - writtenPointer;
               let outdata0 = Array.from(signals[0]);
               outdata0 = outdata0.splice(3072, 31744);
@@ -363,15 +368,40 @@
               }
               writeBuffers0.push(...writeBuffer0);
               writeBuffers1.push(...writeBuffer1);
+              outdata0 = Array.from(signals2[0]);
+              outdata0 = outdata0.splice(3072, 31744);
+              outdata1 = Array.from(signals2[1]);
+              outdata1 = outdata1.splice(3072, 31744);
+              writeBuffer0 = [];
+              writeBuffer1 = [];
+              if (elapse < outdata0.length) {
+                writeBuffer0 = writeBuffer0.concat(
+                  outdata0.slice(outdata0.length - elapse, outdata0.length)
+                );
+              } else {
+                writeBuffer0 = writeBuffer0.concat(outdata0);
+              }
+
+              if (elapse < outdata0.length) {
+                writeBuffer1 = writeBuffer1.concat(
+                  outdata1.slice(outdata1.length - elapse, outdata1.length)
+                );
+              } else {
+                writeBuffer1 = writeBuffer1.concat(outdata1);
+              }
+              writeVocalBuffers0.push(...writeBuffer0);
+              writeVocalBuffers1.push(...writeBuffer1);
+              tf.dispose(vocaldata);
               tf.dispose(data);
             };
             await runner();
-            // if (progress > 20) {
-            //   break;
-            // }
-            progress += 1
-            document.getElementById("progress").value = Math.floor((progress*100)/chunkedChannelData.length);
-            document.getElementById("tips").innerText = `进度${Math.floor((progress*100)/chunkedChannelData.length)}%`;
+            progress += 1;
+            document.getElementById("progress").value = Math.floor(
+              (progress * 100) / chunkedChannelData.length
+            );
+            document.getElementById("tips").innerText = `进度${Math.floor(
+              (progress * 100) / chunkedChannelData.length
+            )}%`;
             // console.log("progress", (progress += 1), chunkedChannelData.length);
           }
           // 测试时解开
@@ -385,13 +415,26 @@
           // Create a URL for the Blob and set it as the href attribute
           const url = URL.createObjectURL(blob);
           a.href = url;
-          a.download = "audiofile.wav";
+          a.download = "background-music.wav";
+          const vblob = bufferToWavBlob([writeVocalBuffers0, writeVocalBuffers1]);
+          // const blob = bufferToWavBlob(buffer);
+          // Create a download link
+          const va = document.createElement("a");
+          document.body.appendChild(va);
+          va.style = "display: none";
+
+          // Create a URL for the Blob and set it as the href attribute
+          const vurl = URL.createObjectURL(vblob);
+          va.href = vurl;
+          va.download = "vocal-music.wav";
 
           // Trigger a click on the link to start the download
           a.click();
+          va.click();
 
           // Clean up the URL object
           window.URL.revokeObjectURL(url);
+          window.URL.revokeObjectURL(vurl);
         });
       };
 
